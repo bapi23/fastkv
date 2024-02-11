@@ -34,18 +34,20 @@ future<> storage::store(std::string key, std::string value) {
     auto wbuf = temporary_buffer<char>::aligned(max_value_size, max_value_size);
     std::fill(wbuf.get_write(), wbuf.get_write() + max_value_size, 0);
     std::copy(value.begin(), value.end(), wbuf.get_write());
-
-    auto valfile = co_await open_file_dma(valfilename, open_flags::wo | open_flags::create);
-    co_await valfile.dma_write(0, wbuf.get(), max_value_size);
-    co_await valfile.close();
+    
+    co_await with_file(open_file_dma(valfilename, open_flags::wo | open_flags::create), [&wbuf] (file& f) {
+                return f.dma_write(0, wbuf.get(), max_value_size);
+            });
+    
 
     auto wbuf_key = temporary_buffer<char>::aligned(max_key_size, max_key_size);
     std::fill(wbuf_key.get_write(), wbuf_key.get_write() + max_key_size, 0);
     std::copy(key.begin(), key.end(), wbuf_key.get_write());
 
-    auto keyfile = co_await open_file_dma(keyfilename, open_flags::wo | open_flags::create);
-    co_await keyfile.dma_write(0, wbuf_key.get(), max_key_size);
-    co_await keyfile.close();
+
+    co_await with_file(open_file_dma(keyfilename, open_flags::wo | open_flags::create), [&wbuf_key] (file& f) {
+                return f.dma_write(0, wbuf_key.get(), max_value_size);
+            });
 
     co_await cache.invoke_on_all([key, value](caching::cache_service& cache){
         cache.get_cache().push_front(key, value);
@@ -93,11 +95,12 @@ future<std::optional<std::string>> storage::get_val(std::string key) const {
         co_return std::nullopt;
     }
     
-    auto valfile = co_await open_file_dma(valfilename, open_flags::ro);
-
     auto buffer = temporary_buffer<char>::aligned(max_value_size, max_value_size);
     std::fill(buffer.get_write(), buffer.get_write() + max_value_size, 0);
-    co_await valfile.dma_read(0, buffer.get_write(), max_value_size);
+
+    co_await with_file(open_file_dma(valfilename, open_flags::ro), [&buffer] (file& f) {
+            return f.dma_read(0, buffer.get_write(), max_value_size);
+    });
     
     sstring content = buffer.get_write(); 
     if (content.empty()) {
@@ -124,9 +127,10 @@ future<std::vector<std::string>> storage::get_keys() const {
         auto buffer = temporary_buffer<char>::aligned(max_key_size, max_key_size);
         std::fill(buffer.get_write(), buffer.get_write() + max_key_size, 0);
         
-        auto file = co_await open_file_dma(keyfilename, open_flags::ro);
-        co_await file.dma_read(0, buffer.get_write(), max_key_size);
-        co_await file.close();
+        co_await with_file(open_file_dma(keyfilename, open_flags::ro), [&buffer] (file& f) {
+            return f.dma_read(0, buffer.get_write(), max_key_size);
+        });
+
         sstring content = buffer.get_write(); 
         keys.push_back(content);
     }

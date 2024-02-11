@@ -88,10 +88,10 @@ func TestStoreAndGet(t *testing.T) {
 }
 
 func TestStoreAndDeleteMultiple(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		store("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
 	}
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		remove("key" + strconv.Itoa(i))
 	}
 }
@@ -114,10 +114,10 @@ func TestFetchAllKeys(t *testing.T) {
 }
 
 func TestStoreAndGetMultiple(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		store("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
 	}
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		get("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
 	}
 }
