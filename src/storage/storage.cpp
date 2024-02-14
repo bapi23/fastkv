@@ -27,6 +27,9 @@ namespace storage {
 storage::storage(seastar::sharded<caching::cache_service>& cache): cache(cache) {}
 
 future<> storage::store(std::string key, std::string value) {
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
     auto hash = std::hash<std::string>{}(key);
     sstring keyfilename = key_dir + std::to_string(hash);
     sstring valfilename = val_dir + std::to_string(hash);
@@ -52,6 +55,12 @@ future<> storage::store(std::string key, std::string value) {
     co_await cache.invoke_on_all([key, value](caching::cache_service& cache){
         cache.get_cache().push_front(key, value);
     });
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
+    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "[ns]" << std::endl;
+
 
     co_return;
 }

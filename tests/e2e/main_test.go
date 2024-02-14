@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"sync"
 )
 
 const posturl = "http://localhost:8899/store"
@@ -94,6 +95,30 @@ func TestStoreAndDeleteMultiple(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		remove("key" + strconv.Itoa(i))
 	}
+}
+
+func TestReadAndOverwriteConcurently(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		for i := 0; i < 100; i++ {
+			fmt.Println("storing")
+			store("key"+strconv.Itoa(1), "val"+strconv.Itoa(1))
+			fmt.Println("stored")
+		}
+		wg.Done()
+	}()
+
+	go func() {
+			for i := 0; i < 100; i++ {
+			fmt.Println("getting")
+			get("key" + strconv.Itoa(1), "val"+strconv.Itoa(1))
+			fmt.Println("got")
+		}	
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
 
 func TestRemoveKey(t *testing.T) {
