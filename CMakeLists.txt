@@ -7,7 +7,6 @@ find_package(Catch2 3 REQUIRED)
 add_executable (fastkv 
 src/main.cpp 
 src/cache/lru_cache.cpp
-src/cache/cache_service.cpp
 src/storage/storage.cpp
 
 src/handlers/delete.cpp

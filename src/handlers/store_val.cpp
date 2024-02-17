@@ -19,14 +19,14 @@ std::optional<std::pair<std::string, std::string>> parse_key_and_val(const std::
 }
 } // anonymous namespace
 
-store_val_handler::store_val_handler(storage::storage&& storage): _storage(std::move(storage)){}
+store_val_handler::store_val_handler(seastar::sharded<storage::storage>& storage): _storage(storage){}
 
 seastar::future<std::unique_ptr<seastar::http::reply> > store_val_handler::handle(const seastar::sstring& path,
         std::unique_ptr<seastar::http::request> req, std::unique_ptr<seastar::http::reply> rep) {
     
     try {
         auto keyAndVal = parse_key_and_val(req->content);
-        
+        std::cout << "store val thread ID1: " << std::this_thread::get_id()  << std::endl;
         if (!keyAndVal){
             rep->set_status(seastar::http::reply::status_type::bad_request);
             rep->_content = fmt::sprintf("can't parse %s to key and value using %s delimeter", req->content, delimter);
@@ -37,7 +37,14 @@ seastar::future<std::unique_ptr<seastar::http::reply> > store_val_handler::handl
         std::cout << "for key: " << keyAndVal->first << std::endl;
         
         auto key = keyAndVal->first;
-        _storage.store(keyAndVal->first, keyAndVal->second);
+        auto val = keyAndVal->second;
+        _storage.local().store(keyAndVal->first, keyAndVal->second);
+
+        co_await _storage.invoke_on_all([key, val] (storage::storage& storage) {
+            std::cout << "store val thread ID1: " << std::this_thread::get_id()  << std::endl;
+            storage.get_cache().push_front(key, val);
+        });
+
         rep->set_status(seastar::http::reply::status_type::created);
         rep->_content = fmt::sprintf("stored key %s", key);
     } catch(...) {

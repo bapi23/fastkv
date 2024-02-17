@@ -8,11 +8,11 @@
 
 class get_keys_handler : public seastar::httpd::handler_base {
 public:
-    explicit get_keys_handler(storage::storage&& storage);
+    explicit get_keys_handler(seastar::sharded<storage::storage>& storage);
 
     seastar::future<std::unique_ptr<seastar::http::reply> > handle(const seastar::sstring& path,
             std::unique_ptr<seastar::http::request> req, std::unique_ptr<seastar::http::reply> rep) override;
 
 private:
-    storage::storage _storage;
+    seastar::sharded<storage::storage>& _storage;
 };

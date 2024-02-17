@@ -9,14 +9,14 @@ namespace {
     constexpr char delete_path[] = "/delete";
 }
 
-void set_routes(seastar::httpd::routes& r, seastar::sharded<caching::cache_service>& cache_service) {
+void set_routes(seastar::httpd::routes& r, seastar::sharded<storage::storage>& storage) {
     namespace httpd = seastar::httpd;
     r.add(httpd::operation_type::GET, httpd::url(get_path).remainder("path"), 
-        new get_val_handler{storage::storage{cache_service}, get_path});
+        new get_val_handler{storage, get_path});
     r.add(httpd::operation_type::GET, httpd::url(get_keys_path), 
-        new get_keys_handler{storage::storage{cache_service}});
+        new get_keys_handler{storage});
     r.add(httpd::operation_type::POST, httpd::url(store_path).remainder("path"), 
-        new store_val_handler{storage::storage{cache_service}});
+        new store_val_handler{storage});
     r.add(httpd::operation_type::GET, httpd::url(delete_path).remainder("path"), 
-        new delete_handler{storage::storage{cache_service}, delete_path});
+        new delete_handler{storage, delete_path});
 }

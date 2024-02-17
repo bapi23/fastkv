@@ -2,6 +2,6 @@
 
 #include <seastar/http/httpd.hh>
 
-#include "cache/cache_service.hpp"
+#include "storage/storage.hpp"
 
-void set_routes(seastar::httpd::routes& r, seastar::sharded<caching::cache_service>& cache_service);
+void set_routes(seastar::httpd::routes& r, seastar::sharded<storage::storage>& cache_service);

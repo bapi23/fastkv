@@ -89,12 +89,21 @@ func TestStoreAndGet(t *testing.T) {
 }
 
 func TestStoreAndDeleteMultiple(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		store("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
-	}
-	for i := 0; i < 100; i++ {
-		remove("key" + strconv.Itoa(i))
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func(){for i := 0; i < 100; i++ {
+			store("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
+		}
+		wg.Done()
+	}()
+	go func(){for i := 0; i < 100; i++ {
+			remove("key" + strconv.Itoa(i))
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
 
 func TestReadAndOverwriteConcurently(t *testing.T) {
@@ -139,10 +148,21 @@ func TestFetchAllKeys(t *testing.T) {
 }
 
 func TestStoreAndGetMultiple(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		store("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
-	}
-	for i := 0; i < 100; i++ {
-		get("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		for i := 0; i < 100; i++ {
+			store("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
+		}
+		wg.Done()
+	}()
+
+	go func(){
+		for i := 0; i < 100; i++ {
+			get("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
 }

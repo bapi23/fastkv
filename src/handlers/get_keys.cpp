@@ -1,18 +1,17 @@
 #include <seastar/core/coroutine.hh>
 
 #include "handlers/get_keys.hpp"
-#include "cache/cache_service.hpp"
 
 namespace {
     const char delim[] = ";";
 }
 
-get_keys_handler::get_keys_handler(storage::storage&& storage) : _storage(std::move(storage)) {}
+get_keys_handler::get_keys_handler(seastar::sharded<storage::storage>& storage): _storage(storage) {}
 
 seastar::future<std::unique_ptr<seastar::http::reply> > get_keys_handler::handle(const seastar::sstring& path,
         std::unique_ptr<seastar::http::request> req, std::unique_ptr<seastar::http::reply> rep) {
     try {
-        std::vector<std::string> keys = co_await _storage.get_keys();
+        std::vector<std::string> keys = co_await _storage.local().get_keys();
 
         std::ostringstream result;
         std::copy(keys.begin(), keys.end(), std::ostream_iterator<std::string>(result, delim));

@@ -10,7 +10,6 @@
 #include "stop_signal.hh"
 #include "handlers/handlers.hpp"
 #include "handlers/routes.hpp"
-#include "cache/cache_service.hpp"
 
 
 namespace bpo = boost::program_options;
@@ -33,15 +32,15 @@ int main(int ac, char** av) {
         return seastar::async([cache_size, port] {
             seastar_apps_lib::stop_signal stop_signal;
 
-            seastar::sharded<caching::cache_service> service;
+            seastar::sharded<storage::storage> service;
             service.start(cache_size).then([&service] (){
-                return service.invoke_on_all([] (caching::cache_service& service) {
+                return service.invoke_on_all([] (storage::storage& service) {
                     return service.run();
                 });
             });
-            auto stop_cache_service = seastar::deferred_stop(service);
+            auto stop_storage_service = seastar::deferred_stop(service);
 
-                        auto server = new seastar::httpd::http_server_control();
+            auto server = new seastar::httpd::http_server_control();
             server->start().get();
 
             auto stop_server = seastar::defer([&] () noexcept {
