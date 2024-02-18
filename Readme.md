@@ -1,4 +1,5 @@
 # FastKV
+Project created to learn seastar library. It's simple key value storage implementation which uses multiple threads to read/write key+value to the storage and cache.
 
 ## Build
 
