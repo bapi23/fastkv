@@ -26,7 +26,6 @@ seastar::future<std::unique_ptr<seastar::http::reply> > store_val_handler::handl
     
     try {
         auto keyAndVal = parse_key_and_val(req->content);
-        std::cout << "store val thread ID1: " << std::this_thread::get_id()  << std::endl;
         if (!keyAndVal){
             rep->set_status(seastar::http::reply::status_type::bad_request);
             rep->_content = fmt::sprintf("can't parse %s to key and value using %s delimeter", req->content, delimter);
@@ -41,7 +40,6 @@ seastar::future<std::unique_ptr<seastar::http::reply> > store_val_handler::handl
         _storage.local().store(keyAndVal->first, keyAndVal->second);
 
         co_await _storage.invoke_on_all([key, val] (storage::storage& storage) {
-            std::cout << "store val thread ID1: " << std::this_thread::get_id()  << std::endl;
             storage.get_cache().push_front(key, val);
         });
 

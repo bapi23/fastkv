@@ -45,7 +45,6 @@ future<> storage::store(std::string key, std::string value) {
     std::copy(key.begin(), key.end(), wbuf.get_write());
     std::copy(value.begin(), value.end(), wbuf.get_write()+max_key_size);
     
-    std::cout << "thread ID1: " << std::this_thread::get_id()  << std::endl;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     auto bytesWritten = co_await with_file(open_file_dma(valfilename, open_flags::wo | open_flags::create), [&wbuf] (file& f) {
@@ -53,11 +52,6 @@ future<> storage::store(std::string key, std::string value) {
             });
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-
-    std::cout << "Time difference = " 
-              << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() 
-              << "[us]" << std::endl;
-    std::cout << "thread ID3: " << std::this_thread::get_id()  << std::endl;
     co_return;
 }
 
@@ -76,7 +70,6 @@ future<bool> storage::remove(std::string key){
 }
 
 future<std::optional<std::string>> storage::get_val(std::string key) const {
-    std::cout << "getting value for key" << key <<std::endl;
     auto value = cache.get(key);
 
     if (value) {
@@ -97,17 +90,14 @@ future<std::optional<std::string>> storage::get_val(std::string key) const {
     auto buffer = temporary_buffer<char>::aligned(max_value_size, max_value_size);
     std::fill(buffer.get_write(), buffer.get_write() + max_value_size, 0);
 
-    std::cout << "getting " << valfilename << std::endl;
 
     auto bytesRead = co_await with_file(open_file_dma(valfilename, open_flags::ro), [&buffer] (file& f) {
             return f.dma_read(0, buffer.get_write(), max_value_size);
     });
     
-    std::cout << "got " << valfilename << std::endl;
     
     std::string content = buffer.get_write();
     std::string val;
-    std::cout << "content size:" << content.size() << std::endl;
     val.resize(content.size() - max_key_size);
     std::copy(content.begin()+max_key_size, content.end(), val.begin());
 
@@ -128,17 +118,13 @@ future<std::vector<std::string>> storage::get_keys() const {
     }
 
     std::vector<std::string> keys;
-    std::cout << "GET KEY 1" << std::endl;
     for (auto keyfilename: hashes) {
         auto buffer = temporary_buffer<char>::aligned(max_value_size, max_value_size);
         std::fill(buffer.get_write(), buffer.get_write() + max_value_size, 0);
-         std::cout << "GET KEY 1.1" << std::endl;
         co_await with_file(open_file_dma(keyfilename, open_flags::ro), [&buffer] (file& f) {
-            std::cout << "GET KEY 2" << std::endl;
             return f.dma_read(0, buffer.get_write(), max_key_size);
         });
 
-        std::cout << "GET KEY 3" << std::endl;
         sstring content = buffer.get_write(); 
         keys.push_back(content);
     }
