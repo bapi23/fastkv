@@ -17,84 +17,78 @@ using namespace httpd;
 namespace {
     constexpr char root_dir[] = "/tmp/fastkv/";
 
-    constexpr char key_dir[] = "/tmp/fastkv/keys/";
-    constexpr char val_dir[] = "/tmp/fastkv/values/";
+    constexpr char val_dir[] = "/tmp/fastkv/";
 
     constexpr size_t max_value_size = 4096;
     constexpr size_t max_key_size = 512; // looks like that's the smalest buffer which doesn't "invalid argument"
+
+    inline void rtrim(std::string &s) {
+        s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }).base(), s.end());
+    }
+
 }
 
 namespace storage {
 
-    storage::storage(const caching::lru_cache& cache): cache(cache) {
-    }
+storage::storage(int cache_size): cache(cache_size) {
+}
 
 future<> storage::store(std::string key, std::string value) {
-
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
     auto hash = std::hash<std::string>{}(key);
-    sstring keyfilename = key_dir + std::to_string(hash);
     sstring valfilename = val_dir + std::to_string(hash);
 
     auto wbuf = temporary_buffer<char>::aligned(max_value_size, max_value_size);
     std::fill(wbuf.get_write(), wbuf.get_write() + max_value_size, 0);
-    std::copy(value.begin(), value.end(), wbuf.get_write());
+    std::fill(wbuf.get_write(), wbuf.get_write() + max_value_size, ' ');
+    std::copy(key.begin(), key.end(), wbuf.get_write());
+    std::copy(value.begin(), value.end(), wbuf.get_write()+max_key_size);
     
     std::cout << "thread ID1: " << std::this_thread::get_id()  << std::endl;
 
-    with_file(open_file_dma(valfilename, open_flags::wo | open_flags::create), [&wbuf] (file& f) {
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    auto bytesWritten = co_await with_file(open_file_dma(valfilename, open_flags::wo | open_flags::create), [&wbuf] (file& f) {
                 return f.dma_write(0, wbuf.get(), max_value_size);
-            }).get();
-    
-
-    auto wbuf_key = temporary_buffer<char>::aligned(max_key_size, max_key_size);
-    std::fill(wbuf_key.get_write(), wbuf_key.get_write() + max_key_size, 0);
-    std::copy(key.begin(), key.end(), wbuf_key.get_write());
-
-    std::cout << "thread ID2: " << std::this_thread::get_id() << std::endl;
-
-    with_file(open_file_dma(keyfilename, open_flags::wo | open_flags::create), [&wbuf_key] (file& f) {
-                return f.dma_write(0, wbuf_key.get(), max_value_size);
-            }).get();
+            });
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
     std::cout << "Time difference = " 
               << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() 
-              << "[ms]" << std::endl;
+              << "[us]" << std::endl;
     std::cout << "thread ID3: " << std::this_thread::get_id()  << std::endl;
-
     co_return;
 }
 
 future<bool> storage::remove(std::string key){
     auto hash = std::hash<std::string>{}(key);
-    sstring keyfilename = key_dir + std::to_string(hash);
     sstring valfilename = val_dir + std::to_string(hash);
 
-    auto exists = seastar::file_exists(keyfilename).get();
+    auto exists = seastar::file_exists(valfilename).get();
 
     if (!exists) {
         co_return false;
     }
 
-    seastar::remove_file(keyfilename).get();
     seastar::remove_file(valfilename).get();
     co_return true;
 }
 
 future<std::optional<std::string>> storage::get_val(std::string key) const {
+    std::cout << "getting value for key" << key <<std::endl;
     auto value = cache.get(key);
 
     if (value) {
-        std::cout << "getting value using cache" << std::endl;
+        std::cout << "getting value using cache: " << *value << std::endl;
         co_return *value;
     }
+    
+    std::cout << "getting value using storage" << std::endl;
 
     auto hash = std::hash<std::string>{}(key);
     sstring valfilename = val_dir + std::to_string(hash);
-    auto exists = seastar::file_exists(valfilename).get();
+    auto exists = co_await seastar::file_exists(valfilename);
 
     if (!exists) {
         co_return std::nullopt;
@@ -103,36 +97,48 @@ future<std::optional<std::string>> storage::get_val(std::string key) const {
     auto buffer = temporary_buffer<char>::aligned(max_value_size, max_value_size);
     std::fill(buffer.get_write(), buffer.get_write() + max_value_size, 0);
 
-    with_file(open_file_dma(valfilename, open_flags::ro), [&buffer] (file& f) {
+    std::cout << "getting " << valfilename << std::endl;
+
+    auto bytesRead = co_await with_file(open_file_dma(valfilename, open_flags::ro), [&buffer] (file& f) {
             return f.dma_read(0, buffer.get_write(), max_value_size);
-    }).get();
+    });
     
-    sstring content = buffer.get_write(); 
+    std::cout << "got " << valfilename << std::endl;
+    
+    std::string content = buffer.get_write();
+    std::string val;
+    std::cout << "content size:" << content.size() << std::endl;
+    val.resize(content.size() - max_key_size);
+    std::copy(content.begin()+max_key_size, content.end(), val.begin());
+
     if (content.empty()) {
         co_return std::nullopt;
     }
 
-    std::cout << "getting value using storage" << std::endl;
-    co_return content;
+    rtrim(val);
+    co_return val;
 }
 
 future<std::vector<std::string>> storage::get_keys() const {
     std::vector<std::string> hashes;
 
     namespace fs = std::filesystem;
-    for (const auto & entry : fs::directory_iterator(key_dir)) {
+    for (const auto & entry : fs::directory_iterator(val_dir)) {
         hashes.push_back(entry.path());                            
     }
 
     std::vector<std::string> keys;
+    std::cout << "GET KEY 1" << std::endl;
     for (auto keyfilename: hashes) {
-        auto buffer = temporary_buffer<char>::aligned(max_key_size, max_key_size);
-        std::fill(buffer.get_write(), buffer.get_write() + max_key_size, 0);
-        
-        with_file(open_file_dma(keyfilename, open_flags::ro), [&buffer] (file& f) {
+        auto buffer = temporary_buffer<char>::aligned(max_value_size, max_value_size);
+        std::fill(buffer.get_write(), buffer.get_write() + max_value_size, 0);
+         std::cout << "GET KEY 1.1" << std::endl;
+        co_await with_file(open_file_dma(keyfilename, open_flags::ro), [&buffer] (file& f) {
+            std::cout << "GET KEY 2" << std::endl;
             return f.dma_read(0, buffer.get_write(), max_key_size);
-        }).get();
+        });
 
+        std::cout << "GET KEY 3" << std::endl;
         sstring content = buffer.get_write(); 
         keys.push_back(content);
     }

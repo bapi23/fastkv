@@ -12,7 +12,7 @@ namespace storage {
 
 class storage {
 public:
-    storage(const caching::lru_cache& cache);
+    storage(int cache_size);
 
     seastar::future<> store(std::string key, std::string value);
     seastar::future<bool> remove(std::string key);

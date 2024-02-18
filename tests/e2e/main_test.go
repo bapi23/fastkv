@@ -148,21 +148,27 @@ func TestFetchAllKeys(t *testing.T) {
 }
 
 func TestStoreAndGetMultiple(t *testing.T) {
+	var wgStore sync.WaitGroup
+	wgStore.Add(100)
+	for i := 0; i < 100; i++ {
+		go func(index int) {
+			key := "key"+strconv.Itoa(index)
+			val := "val"+strconv.Itoa(index)
+			store(key, val)
+			wgStore.Done()
+		}(i)
+	}
+	wgStore.Wait()
+
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		for i := 0; i < 100; i++ {
-			store("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
-		}
-		wg.Done()
-	}()
-
-	go func(){
-		for i := 0; i < 100; i++ {
-			get("key"+strconv.Itoa(i), "val"+strconv.Itoa(i))
-		}
-		wg.Done()
-	}()
-
+	wg.Add(100)
+	for i := 0; i < 100; i++ {
+		go func(index int) {
+			key := "key"+strconv.Itoa(index)
+			val := "val"+strconv.Itoa(index)
+			get(key, val)
+			wg.Done()
+		}(i)
+	}
 	wg.Wait()
 }

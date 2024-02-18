@@ -27,7 +27,5 @@ RUN git clone https://github.com/catchorg/Catch2.git \
     && cmake -Bbuild -H. -DBUILD_TESTING=OFF \
     && cmake --build build/ --target install
 RUN mkdir /tmp/fastkv/
-RUN mkdir /tmp/fastkv/keys
-RUN mkdir /tmp/fastkv/values
 WORKDIR /home/src/
 CMD /bin/bash
